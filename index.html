@@ -52,10 +52,11 @@
 
 <div id="app" v-cloak class="max-w-3xl mx-auto min-h-screen flex flex-col">
 
-    <!-- Header & Overall Progress -->
+    <!-- Header -->
     <header class="bg-white sticky top-0 z-20 border-b border-slate-200 shadow-sm">
         <div class="px-4 py-4 max-w-3xl mx-auto">
-            <div class="flex justify-between items-center mb-4">
+            <!-- Top Bar with User Auth -->
+            <div class="flex justify-between items-start mb-4">
                 <div>
                     <h1 class="text-xl font-bold text-slate-900 flex items-center gap-2">
                         <i class="ph ph-book-bookmark text-brand-600 text-2xl"></i>
@@ -63,8 +64,312 @@
                     </h1>
                     <p class="text-xs text-slate-500 mt-0.5">Weighted by text volume</p>
                 </div>
+                
+                <!-- Auth Button -->
+                <div v-if="!configConfigured" class="text-xs bg-red-50 text-red-600 px-2 py-1 rounded border border-red-100">
+                    Keys Missing (See Code)
+                </div>
+                <div v-else>
+                    <button v-if="!user" @click="signIn" class="text-xs bg-brand-50 text-brand-700 font-medium px-3 py-1.5 rounded-full hover:bg-brand-100 transition-colors flex items-center gap-1.5">
+                        <i class="ph ph-google-logo"></i> Sync
+                    </button>
+                    <div v-else class="flex items-center gap-2">
+                        <span class="text-xs text-slate-500 hidden sm:inline">Saving to Cloud</span>
+                        <img :src="user.photoURL" class="w-7 h-7 rounded-full border border-slate-200" :alt="user.displayName">
+                        <button @click="signOutUser" class="text-xs text-slate-400 hover:text-red-500">
+                            <i class="ph ph-sign-out text-lg"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="flex justify-between items-end mb-2">
+                 <div class="text-xs text-slate-400 font-medium">
+                    {{ formatNumber(totalReadWords) }} / {{ formatNumber(totalWords) }} words
+                </div>
                 <div class="text-right">
-                    <div class="text-2xl font-bold text-brand-600">{{ overallPercentage }}%</div>
+                    <div class="text-2xl font-bold text-brand-600 leading-none">{{ overallPercentage }}%</div>
+                </div>
+            </div>
+
+            <!-- Big Progress Bar -->
+            <div class="h-4 bg-slate-100 rounded-full overflow-hidden w-full relative">
+                <div class="absolute top-0 left-0 h-full bg-brand-500 transition-all duration-500 ease-out"
+                     :style="{ width: overallPercentage + '%' }"></div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow p-4 space-y-4 pb-20">
+        
+        <!-- Filters -->
+        <div class="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+            <button @click="filter = 'all'" 
+                :class="filter === 'all' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'"
+                class="px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors">
+                All Books
+            </button>
+            <button @click="filter = 'ot'" 
+                :class="filter === 'ot' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'"
+                class="px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors">
+                Hebrew-Aramaic
+            </button>
+            <button @click="filter = 'nt'" 
+                :class="filter === 'nt' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'"
+                class="px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors">
+                Christian Greek
+            </button>
+        </div>
+
+        <!-- Book List -->
+        <div class="space-y-3">
+            <div v-for="(book, index) in filteredBooks" :key="book.id" 
+                 class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all duration-300"
+                 :class="{'ring-2 ring-brand-500 ring-offset-2': expandedBook === book.id}">
+                
+                <!-- Book Header (Click to expand) -->
+                <div @click="toggleBook(book.id)" class="cursor-pointer hover:bg-slate-50 transition-colors p-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-semibold text-slate-800 text-lg">{{ book.name }}</h3>
+                        <div class="flex items-center gap-3">
+                             <div class="text-xs font-medium px-2 py-1 rounded-md"
+                                 :class="getBookProgress(book) === 100 ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'">
+                                {{ getBookProgress(book) }}%
+                            </div>
+                            <i class="ph ph-caret-down text-slate-400 transition-transform duration-300"
+                               :class="{'rotate-180': expandedBook === book.id}"></i>
+                        </div>
+                    </div>
+                    
+                    <!-- Mini Progress Bar for Book -->
+                    <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden w-full">
+                        <div class="h-full bg-brand-400 transition-all duration-300"
+                             :style="{ width: getBookProgress(book) + '%' }"></div>
+                    </div>
+                </div>
+
+                <!-- Chapters Grid (Only visible if expanded) -->
+                <div v-show="expandedBook === book.id" class="p-4 pt-0 bg-slate-50 border-t border-slate-100">
+                    <div class="flex justify-between items-center mb-3 mt-3">
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Chapters</span>
+                        <button @click.stop="toggleAllChapters(book)" class="text-xs font-medium text-brand-600 hover:text-brand-700">
+                            {{ isBookComplete(book) ? 'Unmark All' : 'Mark All Read' }}
+                        </button>
+                    </div>
+                    
+                    <div class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
+                        <button v-for="chap in book.chapters" :key="chap"
+                            @click.stop="toggleChapter(book.id, chap)"
+                            class="chapter-btn aspect-square rounded-lg text-sm font-medium flex items-center justify-center border transition-all duration-200 select-none"
+                            :class="isChapterRead(book.id, chap) 
+                                ? 'bg-brand-500 border-brand-600 text-white shadow-sm shadow-brand-200' 
+                                : 'bg-white border-slate-200 text-slate-600 hover:border-brand-300 hover:text-brand-600'">
+                            {{ chap }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Empty State -->
+        <div v-if="filteredBooks.length === 0" class="text-center py-12 text-slate-400">
+            <p>No books found matching filters.</p>
+        </div>
+
+    </main>
+    
+    <!-- Footer / Reset Actions -->
+    <footer class="bg-white border-t border-slate-200 p-6 mt-auto">
+        <div class="max-w-3xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-slate-500">
+            <p v-if="user">Synced as {{ user.email }}</p>
+            <p v-else>Local Data Only</p>
+            <button @click="confirmReset" class="text-red-400 hover:text-red-600 flex items-center gap-1">
+                <i class="ph ph-trash"></i> Reset Progress
+            </button>
+        </div>
+    </footer>
+
+    <!-- Custom Confirm Modal -->
+    <div v-if="showResetModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
+            <h3 class="text-lg font-bold text-slate-900 mb-2">Reset everything?</h3>
+            <p class="text-slate-600 mb-6">This will delete your reading history {{ user ? 'from the cloud' : 'from this device' }}.</p>
+            <div class="flex gap-3 justify-end">
+                <button @click="showResetModal = false" class="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg">Cancel</button>
+                <button @click="resetProgress" class="px-4 py-2 bg-red-500 text-white font-medium hover:bg-red-600 rounded-lg shadow-sm shadow-red-200">Yes, Reset</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Firebase Logic in Module -->
+<script type="module">
+    import { createApp, ref, computed, onMounted, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+    import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+    // --------------------------------------------------------
+    // TODO: REPLACE WITH YOUR CONFIG FROM FIREBASE CONSOLE
+    // --------------------------------------------------------
+    const firebaseConfig = {
+  apiKey: "AIzaSyD3PZ0zzUdIOq9MAD9pgTqy2-0poc7V_q8",
+  authDomain: "nwt-tracker.firebaseapp.com",
+  projectId: "nwt-tracker",
+  storageBucket: "nwt-tracker.firebasestorage.app",
+  messagingSenderId: "397966536612",
+  appId: "1:397966536612:web:7ab6bd0b52008a80901b31"
+};
+    // --------------------------------------------------------
+
+    // Initialize Firebase only if config is valid
+    let auth, db;
+    const isConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY_HERE";
+    
+    if (isConfigured) {
+        const app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+    }
+
+    const BIBLE_DATA = [
+        { id: 1, name: "Genesis", chapters: 50, words: 38267, section: 'ot' },
+        { id: 2, name: "Exodus", chapters: 40, words: 32692, section: 'ot' },
+        { id: 3, name: "Leviticus", chapters: 27, words: 24546, section: 'ot' },
+        { id: 4, name: "Numbers", chapters: 36, words: 32902, section: 'ot' },
+        { id: 5, name: "Deuteronomy", chapters: 34, words: 28461, section: 'ot' },
+        { id: 6, name: "Joshua", chapters: 24, words: 18858, section: 'ot' },
+        { id: 7, name: "Judges", chapters: 21, words: 18976, section: 'ot' },
+        { id: 8, name: "Ruth", chapters: 4, words: 2578, section: 'ot' },
+        { id: 9, name: "1 Samuel", chapters: 31, words: 25061, section: 'ot' },
+        { id: 10, name: "2 Samuel", chapters: 24, words: 20612, section: 'ot' },
+        { id: 11, name: "1 Kings", chapters: 22, words: 24524, section: 'ot' },
+        { id: 12, name: "2 Kings", chapters: 25, words: 23532, section: 'ot' },
+        { id: 13, name: "1 Chronicles", chapters: 29, words: 20369, section: 'ot' },
+        { id: 14, name: "2 Chronicles", chapters: 36, words: 26074, section: 'ot' },
+        { id: 15, name: "Ezra", chapters: 10, words: 7441, section: 'ot' },
+        { id: 16, name: "Nehemiah", chapters: 13, words: 10483, section: 'ot' },
+        { id: 17, name: "Esther", chapters: 10, words: 5637, section: 'ot' },
+        { id: 18, name: "Job", chapters: 42, words: 10102, section: 'ot' },
+        { id: 19, name: "Psalms", chapters: 150, words: 43743, section: 'ot' },
+        { id: 20, name: "Proverbs", chapters: 31, words: 15043, section: 'ot' },
+        { id: 21, name: "Ecclesiastes", chapters: 12, words: 5584, section: 'ot' },
+        { id: 22, name: "Song of Solomon", chapters: 8, words: 2661, section: 'ot' },
+        { id: 23, name: "Isaiah", chapters: 66, words: 37044, section: 'ot' },
+        { id: 24, name: "Jeremiah", chapters: 52, words: 42659, section: 'ot' },
+        { id: 25, name: "Lamentations", chapters: 5, words: 3415, section: 'ot' },
+        { id: 26, name: "Ezekiel", chapters: 48, words: 39407, section: 'ot' },
+        { id: 27, name: "Daniel", chapters: 12, words: 11606, section: 'ot' },
+        { id: 28, name: "Hosea", chapters: 14, words: 5175, section: 'ot' },
+        { id: 29, name: "Joel", chapters: 3, words: 2034, section: 'ot' },
+        { id: 30, name: "Amos", chapters: 9, words: 4217, section: 'ot' },
+        { id: 31, name: "Obadiah", chapters: 1, words: 670, section: 'ot' },
+        { id: 32, name: "Jonah", chapters: 4, words: 1321, section: 'ot' },
+        { id: 33, name: "Micah", chapters: 7, words: 3153, section: 'ot' },
+        { id: 34, name: "Nahum", chapters: 3, words: 1285, section: 'ot' },
+        { id: 35, name: "Habakkuk", chapters: 3, words: 1476, section: 'ot' },
+        { id: 36, name: "Zephaniah", chapters: 3, words: 1617, section: 'ot' },
+        { id: 37, name: "Haggai", chapters: 2, words: 1131, section: 'ot' },
+        { id: 38, name: "Zechariah", chapters: 14, words: 6444, section: 'ot' },
+        { id: 39, name: "Malachi", chapters: 4, words: 1782, section: 'ot' },
+        { id: 40, name: "Matthew", chapters: 28, words: 23684, section: 'nt' },
+        { id: 41, name: "Mark", chapters: 16, words: 15171, section: 'nt' },
+        { id: 42, name: "Luke", chapters: 24, words: 25944, section: 'nt' },
+        { id: 43, name: "John", chapters: 21, words: 19099, section: 'nt' },
+        { id: 44, name: "Acts", chapters: 28, words: 24250, section: 'nt' },
+        { id: 45, name: "Romans", chapters: 16, words: 9447, section: 'nt' },
+        { id: 46, name: "1 Corinthians", chapters: 16, words: 9489, section: 'nt' },
+        { id: 47, name: "2 Corinthians", chapters: 13, words: 6092, section: 'nt' },
+        { id: 48, name: "Galatians", chapters: 6, words: 3098, section: 'nt' },
+        { id: 49, name: "Ephesians", chapters: 6, words: 2422, section: 'nt' },
+        { id: 50, name: "Philippians", chapters: 4, words: 2185, section: 'nt' },
+        { id: 51, name: "Colossians", chapters: 4, words: 1998, section: 'nt' },
+        { id: 52, name: "1 Thessalonians", chapters: 5, words: 1857, section: 'nt' },
+        { id: 53, name: "2 Thessalonians", chapters: 3, words: 1042, section: 'nt' },
+        { id: 54, name: "1 Timothy", chapters: 6, words: 2269, section: 'nt' },
+        { id: 55, name: "2 Timothy", chapters: 4, words: 1703, section: 'nt' },
+        { id: 56, name: "Titus", chapters: 3, words: 921, section: 'nt' },
+        { id: 57, name: "Philemon", chapters: 1, words: 445, section: 'nt' },
+        { id: 58, name: "Hebrews", chapters: 13, words: 6913, section: 'nt' },
+        { id: 59, name: "James", chapters: 5, words: 2309, section: 'nt' },
+        { id: 60, name: "1 Peter", chapters: 5, words: 2482, section: 'nt' },
+        { id: 61, name: "2 Peter", chapters: 3, words: 1559, section: 'nt' },
+        { id: 62, name: "1 John", chapters: 5, words: 2523, section: 'nt' },
+        { id: 63, name: "2 John", chapters: 1, words: 303, section: 'nt' },
+        { id: 64, name: "3 John", chapters: 1, words: 299, section: 'nt' },
+        { id: 65, name: "Jude", chapters: 1, words: 613, section: 'nt' },
+        { id: 66, name: "Revelation", chapters: 22, words: 12000, section: 'nt' }
+    ];
+
+    createApp({
+        setup() {
+            const books = ref(BIBLE_DATA);
+            const readData = ref({});
+            const expandedBook = ref(null);
+            const filter = ref('all');
+            const showResetModal = ref(false);
+            const user = ref(null);
+            const configConfigured = ref(isConfigured);
+            const isSyncing = ref(false);
+
+            // Load from LocalStorage initially
+            const loadLocal = () => {
+                const saved = localStorage.getItem('nwt_progress_data');
+                if (saved) {
+                    try { readData.value = JSON.parse(saved); } catch(e) {}
+                }
+            };
+
+            // Setup Firebase Listeners
+            onMounted(() => {
+                loadLocal(); // Always load local first for instant UI
+
+                if (configConfigured.value) {
+                    onAuthStateChanged(auth, async (currentUser) => {
+                        user.value = currentUser;
+                        
+                        if (currentUser) {
+                            // User logged in: Listen to Firestore
+                            const userDocRef = doc(db, 'users', currentUser.uid);
+                            
+                            // Check if doc exists first to decide whether to push local data
+                            const docSnap = await getDoc(userDocRef);
+                            
+                            if (!docSnap.exists() && Object.keys(readData.value).length > 0) {
+                                // First login with data? Save local to cloud
+                                await setDoc(userDocRef, { progress: readData.value }, { merge: true });
+                            }
+
+                            // Subscribe to changes
+                            onSnapshot(userDocRef, (doc) => {
+                                if (doc.exists() && doc.data().progress) {
+                                    isSyncing.value = true;
+                                    readData.value = doc.data().progress;
+                                    // Update local storage too as backup/offline cache
+                                    localStorage.setItem('nwt_progress_data', JSON.stringify(readData.value));
+                                    setTimeout(() => isSyncing.value = false, 500);
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+
+            // Watcher for saving
+            watch(readData, async (newVal) => {
+                // If the change came from Firestore (isSyncing), don't write back immediately to avoid loop
+                if (isSyncing.value) return;
+
+                // 1. Always save to LocalStorage
+                localStorage.setItem('nwt_progress_data', JSON.stringify(newVal));
+
+                // 2. If logged in, save to Firestore
+                if (user.value && configConfigured.value) {
+                    try {
+                        await setDoc(doc(db, 'users', user.value.uid), {                     <div class="text-2xl font-bold text-brand-600">{{ overallPercentage }}%</div>
                     <div class="text-xs text-slate-500">Completed</div>
                 </div>
             </div>
