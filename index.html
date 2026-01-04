@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NWT Bible Reading Tracker</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [v-cloak] { display: none; }
+        .chapter-btn {
+            transition: all 0.2s ease;
+        }
+        .chapter-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+<div id="app" v-cloak class="max-w-3xl mx-auto min-h-screen flex flex-col">
+
+    <!-- Header & Overall Progress -->
+    <header class="bg-white sticky top-0 z-20 border-b border-slate-200 shadow-sm">
+        <div class="px-4 py-4 max-w-3xl mx-auto">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <h1 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+                        <i class="ph ph-book-bookmark text-brand-600 text-2xl"></i>
+                        NWT Tracker
+                    </h1>
+                    <p class="text-xs text-slate-500 mt-0.5">Weighted by text volume</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-2xl font-bold text-brand-600">{{ overallPercentage }}%</div>
+                    <div class="text-xs text-slate-500">Completed</div>
+                </div>
+            </div>
+
+            <!-- Big Progress Bar -->
+            <div class="h-4 bg-slate-100 rounded-full overflow-hidden w-full relative">
+                <div class="absolute top-0 left-0 h-full bg-brand-500 transition-all duration-500 ease-out"
+                     :style="{ width: overallPercentage + '%' }"></div>
+            </div>
+            
+            <div class="flex justify-between text-xs text-slate-400 mt-1.5 font-medium">
+                <span>0%</span>
+                <span>{{ formatNumber(totalReadWords) }} / {{ formatNumber(totalWords) }} approx. words</span>
+                <span>100%</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow p-4 space-y-4 pb-20">
+        
+        <!-- Filters -->
+        <div class="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+            <button @click="filter = 'all'" 
+                :class="filter === 'all' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'"
+                class="px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors">
+                All Books
+            </button>
+            <button @click="filter = 'ot'" 
+                :class="filter === 'ot' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'"
+                class="px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors">
+                Hebrew-Aramaic
+            </button>
+            <button @click="filter = 'nt'" 
+                :class="filter === 'nt' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'"
+                class="px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors">
+                Christian Greek
+            </button>
+        </div>
+
+        <!-- Book List -->
+        <div class="space-y-3">
+            <div v-for="(book, index) in filteredBooks" :key="book.id" 
+                 class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all duration-300"
+                 :class="{'ring-2 ring-brand-500 ring-offset-2': expandedBook === book.id}">
+                
+                <!-- Book Header (Click to expand) -->
+                <div @click="toggleBook(book.id)" class="cursor-pointer hover:bg-slate-50 transition-colors p-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-semibold text-slate-800 text-lg">{{ book.name }}</h3>
+                        <div class="flex items-center gap-3">
+                             <div class="text-xs font-medium px-2 py-1 rounded-md"
+                                 :class="getBookProgress(book) === 100 ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'">
+                                {{ getBookProgress(book) }}%
+                            </div>
+                            <i class="ph ph-caret-down text-slate-400 transition-transform duration-300"
+                               :class="{'rotate-180': expandedBook === book.id}"></i>
+                        </div>
+                    </div>
+                    
+                    <!-- Mini Progress Bar for Book -->
+                    <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden w-full">
+                        <div class="h-full bg-brand-400 transition-all duration-300"
+                             :style="{ width: getBookProgress(book) + '%' }"></div>
+                    </div>
+                </div>
+
+                <!-- Chapters Grid (Only visible if expanded) -->
+                <div v-show="expandedBook === book.id" class="p-4 pt-0 bg-slate-50 border-t border-slate-100">
+                    <div class="flex justify-between items-center mb-3 mt-3">
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Chapters</span>
+                        <button @click.stop="toggleAllChapters(book)" class="text-xs font-medium text-brand-600 hover:text-brand-700">
+                            {{ isBookComplete(book) ? 'Unmark All' : 'Mark All Read' }}
+                        </button>
+                    </div>
+                    
+                    <div class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
+                        <button v-for="chap in book.chapters" :key="chap"
+                            @click.stop="toggleChapter(book.id, chap)"
+                            class="chapter-btn aspect-square rounded-lg text-sm font-medium flex items-center justify-center border transition-all duration-200 select-none"
+                            :class="isChapterRead(book.id, chap) 
+                                ? 'bg-brand-500 border-brand-600 text-white shadow-sm shadow-brand-200' 
+                                : 'bg-white border-slate-200 text-slate-600 hover:border-brand-300 hover:text-brand-600'">
+                            {{ chap }}
+                        </button>
+                    </div>
+                    <div class="mt-4 text-center">
+                        <p class="text-xs text-slate-400 italic">
+                            ~{{ Math.round(book.words / book.chapters) }} words per chapter (avg)
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Empty State -->
+        <div v-if="filteredBooks.length === 0" class="text-center py-12 text-slate-400">
+            <p>No books found matching filters.</p>
+        </div>
+
+    </main>
+    
+    <!-- Footer / Reset Actions -->
+    <footer class="bg-white border-t border-slate-200 p-6 mt-auto">
+        <div class="max-w-3xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-slate-500">
+            <p>NWT Bible Progress Tracker</p>
+            <button @click="confirmReset" class="text-red-400 hover:text-red-600 flex items-center gap-1">
+                <i class="ph ph-trash"></i> Reset Progress
+            </button>
+        </div>
+    </footer>
+
+    <!-- Custom Confirm Modal -->
+    <div v-if="showResetModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
+            <h3 class="text-lg font-bold text-slate-900 mb-2">Reset everything?</h3>
+            <p class="text-slate-600 mb-6">This will permanently delete your reading history. This action cannot be undone.</p>
+            <div class="flex gap-3 justify-end">
+                <button @click="showResetModal = false" class="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg">Cancel</button>
+                <button @click="resetProgress" class="px-4 py-2 bg-red-500 text-white font-medium hover:bg-red-600 rounded-lg shadow-sm shadow-red-200">Yes, Reset</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const { createApp, ref, computed, onMounted, watch } = Vue;
+
+    // Data: Name, Chapters, Approximate Word Count (based on KJV/Standard stats as proxy for text volume)
+    const BIBLE_DATA = [
+        // Hebrew-Aramaic
+        { id: 1, name: "Genesis", chapters: 50, words: 38267, section: 'ot' },
+        { id: 2, name: "Exodus", chapters: 40, words: 32692, section: 'ot' },
+        { id: 3, name: "Leviticus", chapters: 27, words: 24546, section: 'ot' },
+        { id: 4, name: "Numbers", chapters: 36, words: 32902, section: 'ot' },
+        { id: 5, name: "Deuteronomy", chapters: 34, words: 28461, section: 'ot' },
+        { id: 6, name: "Joshua", chapters: 24, words: 18858, section: 'ot' },
+        { id: 7, name: "Judges", chapters: 21, words: 18976, section: 'ot' },
+        { id: 8, name: "Ruth", chapters: 4, words: 2578, section: 'ot' },
+        { id: 9, name: "1 Samuel", chapters: 31, words: 25061, section: 'ot' },
+        { id: 10, name: "2 Samuel", chapters: 24, words: 20612, section: 'ot' },
+        { id: 11, name: "1 Kings", chapters: 22, words: 24524, section: 'ot' },
+        { id: 12, name: "2 Kings", chapters: 25, words: 23532, section: 'ot' },
+        { id: 13, name: "1 Chronicles", chapters: 29, words: 20369, section: 'ot' },
+        { id: 14, name: "2 Chronicles", chapters: 36, words: 26074, section: 'ot' },
+        { id: 15, name: "Ezra", chapters: 10, words: 7441, section: 'ot' },
+        { id: 16, name: "Nehemiah", chapters: 13, words: 10483, section: 'ot' },
+        { id: 17, name: "Esther", chapters: 10, words: 5637, section: 'ot' },
+        { id: 18, name: "Job", chapters: 42, words: 10102, section: 'ot' },
+        { id: 19, name: "Psalms", chapters: 150, words: 43743, section: 'ot' },
+        { id: 20, name: "Proverbs", chapters: 31, words: 15043, section: 'ot' },
+        { id: 21, name: "Ecclesiastes", chapters: 12, words: 5584, section: 'ot' },
+        { id: 22, name: "Song of Solomon", chapters: 8, words: 2661, section: 'ot' },
+        { id: 23, name: "Isaiah", chapters: 66, words: 37044, section: 'ot' },
+        { id: 24, name: "Jeremiah", chapters: 52, words: 42659, section: 'ot' },
+        { id: 25, name: "Lamentations", chapters: 5, words: 3415, section: 'ot' },
+        { id: 26, name: "Ezekiel", chapters: 48, words: 39407, section: 'ot' },
+        { id: 27, name: "Daniel", chapters: 12, words: 11606, section: 'ot' },
+        { id: 28, name: "Hosea", chapters: 14, words: 5175, section: 'ot' },
+        { id: 29, name: "Joel", chapters: 3, words: 2034, section: 'ot' },
+        { id: 30, name: "Amos", chapters: 9, words: 4217, section: 'ot' },
+        { id: 31, name: "Obadiah", chapters: 1, words: 670, section: 'ot' },
+        { id: 32, name: "Jonah", chapters: 4, words: 1321, section: 'ot' },
+        { id: 33, name: "Micah", chapters: 7, words: 3153, section: 'ot' },
+        { id: 34, name: "Nahum", chapters: 3, words: 1285, section: 'ot' },
+        { id: 35, name: "Habakkuk", chapters: 3, words: 1476, section: 'ot' },
+        { id: 36, name: "Zephaniah", chapters: 3, words: 1617, section: 'ot' },
+        { id: 37, name: "Haggai", chapters: 2, words: 1131, section: 'ot' },
+        { id: 38, name: "Zechariah", chapters: 14, words: 6444, section: 'ot' },
+        { id: 39, name: "Malachi", chapters: 4, words: 1782, section: 'ot' },
+        
+        // Christian Greek
+        { id: 40, name: "Matthew", chapters: 28, words: 23684, section: 'nt' },
+        { id: 41, name: "Mark", chapters: 16, words: 15171, section: 'nt' },
+        { id: 42, name: "Luke", chapters: 24, words: 25944, section: 'nt' },
+        { id: 43, name: "John", chapters: 21, words: 19099, section: 'nt' },
+        { id: 44, name: "Acts", chapters: 28, words: 24250, section: 'nt' },
+        { id: 45, name: "Romans", chapters: 16, words: 9447, section: 'nt' },
+        { id: 46, name: "1 Corinthians", chapters: 16, words: 9489, section: 'nt' },
+        { id: 47, name: "2 Corinthians", chapters: 13, words: 6092, section: 'nt' },
+        { id: 48, name: "Galatians", chapters: 6, words: 3098, section: 'nt' },
+        { id: 49, name: "Ephesians", chapters: 6, words: 2422, section: 'nt' },
+        { id: 50, name: "Philippians", chapters: 4, words: 2185, section: 'nt' },
+        { id: 51, name: "Colossians", chapters: 4, words: 1998, section: 'nt' },
+        { id: 52, name: "1 Thessalonians", chapters: 5, words: 1857, section: 'nt' },
+        { id: 53, name: "2 Thessalonians", chapters: 3, words: 1042, section: 'nt' },
+        { id: 54, name: "1 Timothy", chapters: 6, words: 2269, section: 'nt' },
+        { id: 55, name: "2 Timothy", chapters: 4, words: 1703, section: 'nt' },
+        { id: 56, name: "Titus", chapters: 3, words: 921, section: 'nt' },
+        { id: 57, name: "Philemon", chapters: 1, words: 445, section: 'nt' },
+        { id: 58, name: "Hebrews", chapters: 13, words: 6913, section: 'nt' },
+        { id: 59, name: "James", chapters: 5, words: 2309, section: 'nt' },
+        { id: 60, name: "1 Peter", chapters: 5, words: 2482, section: 'nt' },
+        { id: 61, name: "2 Peter", chapters: 3, words: 1559, section: 'nt' },
+        { id: 62, name: "1 John", chapters: 5, words: 2523, section: 'nt' },
+        { id: 63, name: "2 John", chapters: 1, words: 303, section: 'nt' },
+        { id: 64, name: "3 John", chapters: 1, words: 299, section: 'nt' },
+        { id: 65, name: "Jude", chapters: 1, words: 613, section: 'nt' },
+        { id: 66, name: "Revelation", chapters: 22, words: 12000, section: 'nt' }
+    ];
+
+    createApp({
+        setup() {
+            // State
+            const books = ref(BIBLE_DATA);
+            const readData = ref({}); // Structure: { "bookId-chapterNum": true }
+            const expandedBook = ref(null);
+            const filter = ref('all');
+            const showResetModal = ref(false);
+
+            // Load from LocalStorage
+            onMounted(() => {
+                const saved = localStorage.getItem('nwt_progress_data');
+                if (saved) {
+                    try {
+                        readData.value = JSON.parse(saved);
+                    } catch(e) { console.error('Error loading data', e); }
+                }
+            });
+
+            // Persist to LocalStorage
+            watch(readData, (newVal) => {
+                localStorage.setItem('nwt_progress_data', JSON.stringify(newVal));
+            }, { deep: true });
+
+            // Computed: Filtering
+            const filteredBooks = computed(() => {
+                if (filter.value === 'all') return books.value;
+                return books.value.filter(b => b.section === filter.value);
+            });
+
+            // Computed: Total Words in Bible
+            const totalWords = computed(() => {
+                return books.value.reduce((acc, book) => acc + book.words, 0);
+            });
+
+            // Computed: Total Read Words
+            const totalReadWords = computed(() => {
+                let count = 0;
+                books.value.forEach(book => {
+                    const avgChapterWords = book.words / book.chapters;
+                    // Count how many chapters of this book are read
+                    let readChaptersCount = 0;
+                    for(let i=1; i<=book.chapters; i++) {
+                        if (readData.value[`${book.id}-${i}`]) {
+                            readChaptersCount++;
+                        }
+                    }
+                    count += (readChaptersCount * avgChapterWords);
+                });
+                return Math.round(count);
+            });
+
+            // Computed: Overall Percentage
+            const overallPercentage = computed(() => {
+                if (totalWords.value === 0) return 0;
+                return ((totalReadWords.value / totalWords.value) * 100).toFixed(1);
+            });
+
+            // Methods
+            const toggleBook = (id) => {
+                expandedBook.value = expandedBook.value === id ? null : id;
+            };
+
+            const isChapterRead = (bookId, chapter) => {
+                return !!readData.value[`${bookId}-${chapter}`];
+            };
+
+            const toggleChapter = (bookId, chapter) => {
+                const key = `${bookId}-${chapter}`;
+                if (readData.value[key]) {
+                    delete readData.value[key];
+                } else {
+                    readData.value[key] = true;
+                }
+            };
+
+            const getBookProgress = (book) => {
+                let readCount = 0;
+                for(let i=1; i<=book.chapters; i++) {
+                    if (readData.value[`${book.id}-${i}`]) readCount++;
+                }
+                return Math.round((readCount / book.chapters) * 100);
+            };
+
+            const isBookComplete = (book) => {
+                for(let i=1; i<=book.chapters; i++) {
+                    if (!readData.value[`${book.id}-${i}`]) return false;
+                }
+                return true;
+            };
+
+            const toggleAllChapters = (book) => {
+                const complete = isBookComplete(book);
+                for(let i=1; i<=book.chapters; i++) {
+                    const key = `${book.id}-${i}`;
+                    if (complete) {
+                        delete readData.value[key]; // Unmark all
+                    } else {
+                        readData.value[key] = true; // Mark all
+                    }
+                }
+            };
+
+            const formatNumber = (num) => {
+                return new Intl.NumberFormat().format(num);
+            };
+
+            const confirmReset = () => {
+                showResetModal.value = true;
+            };
+
+            const resetProgress = () => {
+                readData.value = {};
+                showResetModal.value = false;
+                expandedBook.value = null;
+            };
+
+            return {
+                filteredBooks,
+                readData,
+                expandedBook,
+                toggleBook,
+                toggleChapter,
+                isChapterRead,
+                getBookProgress,
+                toggleAllChapters,
+                isBookComplete,
+                overallPercentage,
+                totalReadWords,
+                totalWords,
+                filter,
+                formatNumber,
+                showResetModal,
+                confirmReset,
+                resetProgress
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
+
