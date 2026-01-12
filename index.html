@@ -8,8 +8,8 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Vue 3 -->
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Vue 3 ESM Build -->
+    <script src="https://unpkg.com/vue@3/dist/vue.esm-browser.js"></script>
     
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -62,7 +62,6 @@
     <!-- Header -->
     <header class="bg-white sticky top-0 z-20 border-b border-slate-200 shadow-sm">
         <div class="px-4 py-4 max-w-3xl mx-auto">
-            <!-- Top Bar with User Auth -->
             <div class="flex justify-between items-start mb-4">
                 <div>
                     <h1 class="text-xl font-bold text-slate-900 flex items-center gap-2">
@@ -72,7 +71,6 @@
                     <p class="text-xs text-slate-500 mt-0.5">Weighted by text volume</p>
                 </div>
                 
-                <!-- Auth Button -->
                 <div>
                     <button v-if="!user" @click="signIn" class="text-xs bg-brand-50 text-brand-700 font-medium px-4 py-2 rounded-full hover:bg-brand-100 transition-colors flex items-center gap-1.5 shadow-sm">
                         <i class="ph ph-google-logo"></i> Sign in to Sync
@@ -87,28 +85,41 @@
                 </div>
             </div>
 
-            <!-- Stats -->
-            <div class="flex justify-between items-end mb-2">
-                 <div class="text-xs text-slate-400 font-medium tracking-tight">
-                    {{ formatNumber(totalReadWords) }} / {{ formatNumber(totalWords) }} words read
+            <!-- Stats & Pace -->
+            <div class="flex flex-col gap-3 mb-3">
+                <div class="flex justify-between items-end">
+                    <div class="space-y-1">
+                        <div class="text-xs text-slate-400 font-medium tracking-tight">
+                            {{ formatNumber(totalReadWords) }} / {{ formatNumber(totalWords) }} words read
+                        </div>
+                        <!-- Pace Indicator -->
+                        <div class="flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider inline-flex"
+                             :class="paceDays >= 0 ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'">
+                            <i :class="paceDays >= 0 ? 'ph ph-trend-up' : 'ph ph-trend-down'"></i>
+                            {{ paceMessage }}
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-2xl font-bold text-brand-600 leading-none">{{ overallPercentage }}%</div>
+                    </div>
                 </div>
-                <div class="text-right">
-                    <div class="text-2xl font-bold text-brand-600 leading-none">{{ overallPercentage }}%</div>
-                </div>
-            </div>
 
-            <!-- Big Progress Bar -->
-            <div class="h-4 bg-slate-100 rounded-full overflow-hidden w-full relative shadow-inner">
-                <div class="absolute top-0 left-0 h-full bg-brand-500 transition-all duration-700 ease-out"
-                     :style="{ width: overallPercentage + '%' }"></div>
+                <!-- Big Progress Bar -->
+                <div class="h-4 bg-slate-100 rounded-full overflow-hidden w-full relative shadow-inner">
+                    <!-- Expected Progress Marker (Pace) -->
+                    <div class="absolute top-0 h-full w-0.5 bg-slate-400/50 z-10"
+                         :title="'Expected: ' + expectedPercentage + '%'"
+                         :style="{ left: expectedPercentage + '%' }"></div>
+                    
+                    <div class="absolute top-0 left-0 h-full bg-brand-500 transition-all duration-700 ease-out z-0"
+                         :style="{ width: overallPercentage + '%' }"></div>
+                </div>
             </div>
         </div>
     </header>
 
-    <!-- Main Content -->
     <main class="flex-grow p-4 space-y-4 pb-20">
         
-        <!-- Filters -->
         <div class="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
             <button @click="filter = 'all'" 
                 :class="filter === 'all' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'"
@@ -127,13 +138,11 @@
             </button>
         </div>
 
-        <!-- Book List -->
         <div class="space-y-3">
             <div v-for="(book, index) in filteredBooks" :key="book.id" 
                  class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all duration-300"
                  :class="{'ring-2 ring-brand-500 ring-offset-2': expandedBook === book.id}">
                 
-                <!-- Book Header -->
                 <div @click="toggleBook(book.id)" class="cursor-pointer hover:bg-slate-50 transition-colors p-4">
                     <div class="flex justify-between items-center mb-2">
                         <h3 class="font-semibold text-slate-800 text-lg">{{ book.name }}</h3>
@@ -147,14 +156,12 @@
                         </div>
                     </div>
                     
-                    <!-- Mini Progress Bar for Book -->
                     <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden w-full">
                         <div class="h-full bg-brand-400 transition-all duration-500"
                              :style="{ width: getBookProgress(book) + '%' }"></div>
                     </div>
                 </div>
 
-                <!-- Chapters Grid (Only visible if expanded) -->
                 <div v-if="expandedBook === book.id" class="p-4 pt-0 bg-slate-50 border-t border-slate-100">
                     <div class="flex justify-between items-center mb-3 mt-4">
                         <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Chapters</span>
@@ -177,7 +184,6 @@
             </div>
         </div>
         
-        <!-- Empty State -->
         <div v-if="filteredBooks.length === 0" class="text-center py-12 text-slate-400 bg-white rounded-xl border border-dashed border-slate-200">
             <i class="ph ph-magnifying-glass text-4xl mb-2"></i>
             <p>No books found matching filters.</p>
@@ -185,7 +191,6 @@
 
     </main>
     
-    <!-- Footer / Reset Actions -->
     <footer class="bg-white border-t border-slate-200 p-6 mt-auto">
         <div class="max-w-3xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-slate-500">
             <div class="flex items-center gap-2">
@@ -199,14 +204,13 @@
         </div>
     </footer>
 
-    <!-- Custom Confirm Modal -->
     <div v-if="showResetModal" class="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
         <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 animate-in fade-in zoom-in duration-200">
             <div class="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-4">
                 <i class="ph ph-warning text-2xl"></i>
             </div>
             <h3 class="text-xl font-bold text-slate-900 mb-2">Clear all progress?</h3>
-            <p class="text-slate-500 mb-6 leading-relaxed">This will permanently delete your reading history from {{ user ? 'the cloud and this device' : 'this device' }}.</p>
+            <p class="text-slate-500 mb-6 leading-relaxed">This will permanently delete your reading history.</p>
             <div class="flex gap-3">
                 <button @click="showResetModal = false" class="flex-1 px-4 py-3 text-slate-700 font-semibold bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
                     Cancel
@@ -220,14 +224,13 @@
 
 </div>
 
-<!-- Firebase Logic -->
 <script type="module">
     import { createApp, ref, computed, onMounted, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
     import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
     import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-    // Firebase Config
+    // Set your real config here
     const firebaseConfig = {
         apiKey: "AIzaSyD3PZ0zzUdIOq9MAD9pgTqy2-0poc7V_q8",
         authDomain: "nwt-tracker.firebaseapp.com",
@@ -237,10 +240,16 @@
         appId: "1:397966536612:web:7ab6bd0b52008a80901b31"
     };
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-    const appId = "nwt-tracker-app"; // Unique identifier for storage rules
+    let auth, db;
+    try {
+        const app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+    } catch (e) {
+        console.error("Firebase initialization failed.", e);
+    }
+
+    const appId = "nwt-tracker-app";
 
     const BIBLE_DATA = [
         { id: 1, name: "Genesis", chapters: 50, words: 38267, section: 'ot' },
@@ -321,6 +330,15 @@
             const user = ref(null);
             const isSyncing = ref(false);
 
+            // Pace calculations
+            const today = new Date();
+            const startOfYear = new Date(today.getFullYear(), 0, 0);
+            const diff = today - startOfYear;
+            const oneDay = 1000 * 60 * 60 * 24;
+            const currentDayOfYear = Math.floor(diff / oneDay);
+            const isLeapYear = (year) => (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+            const totalDaysInYear = isLeapYear(today.getFullYear()) ? 366 : 365;
+
             const loadLocal = () => {
                 const saved = localStorage.getItem('nwt_progress_data');
                 if (saved) {
@@ -330,36 +348,32 @@
 
             onMounted(() => {
                 loadLocal();
-
-                onAuthStateChanged(auth, async (currentUser) => {
-                    user.value = currentUser;
-                    
-                    if (currentUser) {
-                        // Following strict path rules: /artifacts/{appId}/users/{userId}/{collectionName}
-                        const userDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'settings', 'progress');
-                        const docSnap = await getDoc(userDocRef);
-                        
-                        if (!docSnap.exists() && Object.keys(readData.value).length > 0) {
-                            await setDoc(userDocRef, { data: readData.value }, { merge: true });
-                        }
-
-                        onSnapshot(userDocRef, (doc) => {
-                            if (doc.exists() && doc.data().data) {
-                                isSyncing.value = true;
-                                readData.value = { ...doc.data().data };
-                                localStorage.setItem('nwt_progress_data', JSON.stringify(readData.value));
-                                setTimeout(() => isSyncing.value = false, 100);
+                if (auth) {
+                    onAuthStateChanged(auth, async (currentUser) => {
+                        user.value = currentUser;
+                        if (currentUser && db) {
+                            const userDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'settings', 'progress');
+                            const docSnap = await getDoc(userDocRef);
+                            if (!docSnap.exists() && Object.keys(readData.value).length > 0) {
+                                await setDoc(userDocRef, { data: readData.value }, { merge: true });
                             }
-                        }, (err) => console.error("Snapshot error:", err));
-                    }
-                });
+                            onSnapshot(userDocRef, (doc) => {
+                                if (doc.exists() && doc.data().data) {
+                                    isSyncing.value = true;
+                                    readData.value = { ...doc.data().data };
+                                    localStorage.setItem('nwt_progress_data', JSON.stringify(readData.value));
+                                    setTimeout(() => isSyncing.value = false, 100);
+                                }
+                            });
+                        }
+                    });
+                }
             });
 
             watch(readData, async (newVal) => {
                 if (isSyncing.value) return;
                 localStorage.setItem('nwt_progress_data', JSON.stringify(newVal));
-
-                if (user.value) {
+                if (user.value && db) {
                     try {
                         const userDocRef = doc(db, 'artifacts', appId, 'users', user.value.uid, 'settings', 'progress');
                         await setDoc(userDocRef, { data: newVal }, { merge: true });
@@ -368,22 +382,20 @@
             }, { deep: true });
 
             const signIn = async () => {
+                if (!auth) return;
                 const provider = new GoogleAuthProvider();
                 try {
-                    // This triggers the standard Google Popup
                     const result = await signInWithPopup(auth, provider);
                     user.value = result.user;
                 } catch (error) {
-                    console.error("Login failed:", error.code, error.message);
-                    if (error.code === 'auth/popup-blocked') {
-                        // Fallback message logic could go here if needed
-                    }
+                    console.error("Login failed:", error.message);
                 }
             };
 
-            const signOutUser = () => { signOut(auth); };
+            const signOutUser = () => { if (auth) signOut(auth); };
             const filteredBooks = computed(() => filter.value === 'all' ? books.value : books.value.filter(b => b.section === filter.value));
             const totalWords = computed(() => books.value.reduce((acc, book) => acc + book.words, 0));
+            
             const totalReadWords = computed(() => {
                 let count = 0;
                 books.value.forEach(book => {
@@ -396,7 +408,27 @@
                 });
                 return Math.round(count);
             });
+
             const overallPercentage = computed(() => totalWords.value === 0 ? 0 : ((totalReadWords.value / totalWords.value) * 100).toFixed(1));
+            
+            // Expected progress calculation
+            const expectedPercentage = computed(() => {
+                return ((currentDayOfYear / totalDaysInYear) * 100).toFixed(1);
+            });
+
+            const paceDays = computed(() => {
+                const wordsPerDay = totalWords.value / totalDaysInYear;
+                const expectedWordsRead = wordsPerDay * currentDayOfYear;
+                const diffWords = totalReadWords.value - expectedWordsRead;
+                return Math.round(diffWords / wordsPerDay);
+            });
+
+            const paceMessage = computed(() => {
+                const days = Math.abs(paceDays.value);
+                if (paceDays.value === 0) return "Right on pace";
+                return paceDays.value > 0 ? `${days} day${days !== 1 ? 's' : ''} ahead` : `${days} day${days !== 1 ? 's' : ''} behind`;
+            });
+
             const toggleBook = (id) => { expandedBook.value = expandedBook.value === id ? null : id; };
             const isChapterRead = (bookId, chapter) => !!readData.value[`${bookId}-${chapter}`];
             const toggleChapter = (bookId, chapter) => {
@@ -437,7 +469,8 @@
                 filteredBooks, readData, expandedBook, toggleBook, toggleChapter,
                 isChapterRead, getBookProgress, toggleAllChapters, isBookComplete,
                 overallPercentage, totalReadWords, totalWords, filter, formatNumber,
-                showResetModal, confirmReset, resetProgress, user, signIn, signOutUser
+                showResetModal, confirmReset, resetProgress, user, signIn, signOutUser,
+                paceDays, paceMessage, expectedPercentage
             };
         }
     }).mount('#app');
